@@ -6,8 +6,9 @@ Write a complete transformer model line by line, and use it to generate the pass
 - 使用一个 `<Title, Content>` 数据集进行微调
 - The final result is, if you give model a piece of content, it will return a well-written and summarized **`topic`** of this content.
 
-
-
+---
+## Notice:
+- This project is still in the progress, which will be finished in a few days.
 --- 
 
 
