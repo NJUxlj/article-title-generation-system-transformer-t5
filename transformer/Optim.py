@@ -23,7 +23,8 @@ class ScheduledOptim():
 
     def step_and_update_lr(self):
         "Step with the inner optimizer"
-        pass
+        self._update_learning_rate()
+		self._optimizer.step()
 
     def zero_grad(self):
         self._optimizer.zero_grad()
@@ -75,7 +76,7 @@ class ScheduledOptim():
             预热阶段的必要性：
                 在训练初期，模型参数随机初始化，梯度可能不稳定
                 渐进式增加学习率可以防止训练早期的剧烈震荡
-                让模型在较小的学习率下先学习一些基本模式2
+                让模型在较小的学习率下先学习一些基本模式
             衰减阶段的作用：
                 随着训练进行，较小的学习率有助于模型精细调整
                 平方根衰减提供了一个相对温和的衰减速度
@@ -93,6 +94,9 @@ class ScheduledOptim():
     def _update_learning_rate(self):
         ''' Learning rate scheduling per step '''
         self.n_steps+=1
+        lr = self.lr_mul * self._get_lr_scale()
+        for param_group in self._optimizer.param_groups():
+			param_group['lr'] = lr
 
 
 
