@@ -1,7 +1,12 @@
 import torch  
 from torch import nn  
 from torch.utils.data import Dataset, DataLoader  
-from transformers import T5Tokenizer, T5ForConditionalGeneration  
+from transformers import (
+    AutoModelForSeq2SeqLM,
+    AutoModelForCausalLM,
+    T5Tokenizer, 
+    T5ForConditionalGeneration  
+)
 from torch.optim import AdamW  
 from typing import Dict, List, Optional  
 
