@@ -17,3 +17,7 @@ Config = {
     "valid_data_path": r"sample_data.json",
     "beam_size":5
 }
+
+
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")

@@ -18,11 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 def choose_optimizer(config, model):
-    optimizer = config['optimizer']
-    learning_rate = config['learning_rate']
-    
-    if optimizer == 'adam'
-        return torch.optim.Adam(param = model.parameters(), lr = learning_rate)
+	optimizer = config['optimizer']
+	learning_rate = config['learning_rate']
+
+	if optimizer == 'adam':
+		return torch.optim.Adam(param = model.parameters(), lr = learning_rate)
 	elif optimizer == 'sgd':
 		return torch.optim.Adam(param = model.parameters(), lr = learning_rate)
 
@@ -35,7 +35,10 @@ def choose_optimizer(config, model):
 
 
 def main(config):
-    #创建保存模型的目录
+	'''
+	
+	'''
+	#创建保存模型的目录
 
 
 
@@ -69,4 +72,4 @@ def main(config):
 
 
 if __name__ == '__main__':
-    main(Config)
+	main(Config)
