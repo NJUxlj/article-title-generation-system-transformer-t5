@@ -56,6 +56,7 @@ class PandasDataset(Dataset):
 
         # 初始化特征处理器  
         self.label_encoders = {}
+        self.stopwords = stopwords.words('english')
         '''
         StandardScaler:
             将数据转换为均值为0，标准差为1的分布
@@ -68,7 +69,7 @@ class PandasDataset(Dataset):
             保留零值
             对异常值敏感
         '''
-
+        print("start prepare data ...")
         self._prepare_data()
     
 
@@ -221,32 +222,85 @@ class PandasDataset(Dataset):
     def avg_word(self, sentence:str):
         words = sentence.split()
         return (sum(len(word) for word in words)/len(words))
+    
 
+
+    def add_avg_word(self):
+        for i, col in enumerate(self.text_cols):
+            self.df[f'avg_word_{col}'] = self.df[col].apply(lambda x: self.avg_word(x))
+
+    
+
+    def add_word_count(self, col:str):
+        for i, col in enumerate(self.text_cols):
+            self.df[f'word_count_{col}'] = self.df[col].apply(lambda x: len(x.split()))
+
+    def add_char_count(self, col:str):
+        for i, col in enumerate(self.text_cols):
+            self.df[f'char_count_{col}'] = self.df[col].str.len()
 
     def to_lower(self):
-        pass
+        for i, col in enumerate(self.text_cols):
+            self.df[col] = self.df[col].apply(lambda x: "".join([word.lower() for word in x.split()]))
 
 
 
     def to_upper(self):
-        pass
+        for i, col in enumerate(self.text_cols):
+            self.df[col] = self.df[col].apply(
+                lambda x: " ".join([word.upper() for word in x.split()])
+            )
 
 
     def remove_punctuation_special_symbols(self):
-        pass
+        for i, col in enumerate(self.text_cols):
+            self.df[col] = self.df[col].str.replace(r'[^\w\s]','')
+
 
 
     def remove_stopwords(self):
-        pass
+        for i, col in enumerate(self.text_cols):
+            self.df[col] = self.df[col].apply(
+                lambda x: " ".join([word for word in x.split() if word not in self.stopwords])
+            )
 
 
     def remove_scarce_words(self):
-        pass
+        for i, col in enumerate(self.text_cols):
+            freq = pd.Series(' '.join(self.df[col]).split()).value_counts()[-10:]
+
+            self.df[col] = self.df[col].apply(
+                lambda x: " ".join(x for x in x.split() if x not in freq)
+            )
 
 
-
-    def clean_data(self):
-        pass
+    def clean_data(self,   
+                to_lower: bool = True,  
+                remove_punct: bool = True,  
+                remove_stops: bool = True,  
+                remove_scarce: bool = True,  
+                ) -> Dataset:  
+        """     
+        执行完整的数据清理流程  
+        Args:  
+            to_lower: 是否转换为小写  
+            remove_punct: 是否移除标点符号  
+            remove_stops: 是否移除停用词  
+            remove_scarce: 是否移除低频词  
+            min_freq: 最小词频阈值  
+        Returns:  
+            清理后的数据集  
+        """  
+        if to_lower:  
+            self.to_lower()  
+        if remove_punct:  
+            self.remove_punctuation_special_symbols()  
+        if remove_stops:  
+            self.remove_stopwords()  
+        if remove_scarce:  
+            self.remove_scarce_words()  
+            
+        return self
 
 
 
@@ -443,15 +497,7 @@ class HFDataset(Dataset):
 
 
 
-
-
-
-
-if __name__ == '__main__':
-    # ds = PandasDataset('../sample_data.json')
-    # ds.print_dataframe_info()
-
-
+def test_hf_dataset():
     # 以IMDB数据集为例  
     hf_ds = HFDataset("./imdb", text_column="text", split = 'train')  
      # 打印原始数据集的一个样本  
@@ -472,3 +518,27 @@ if __name__ == '__main__':
     # 验证数据集的基本功能  
     print("\nDataset length:", len(cleaned_dataset))  
     print("Dataset features:", cleaned_dataset.features)
+
+
+
+
+def test_pandas_dataset():
+    text_cols = ["content", "title"]
+
+    ds = PandasDataset('../sample_data.json', text_cols=text_cols)
+    ds.print_dataframe_info()
+    # print("Dataset Info = ", ds.info)
+    ds.clean_data()
+    print("clean dataset done")
+
+
+
+if __name__ == '__main__':
+    # ds = PandasDataset('../sample_data.json')
+    # ds.print_dataframe_info()
+
+    # test_hf_dataset()
+    test_pandas_dataset()
+
+
+    

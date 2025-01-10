@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 
 
+from transformer.Models import Transformer
+
 
 
 def choose_optimizer(config, model):
