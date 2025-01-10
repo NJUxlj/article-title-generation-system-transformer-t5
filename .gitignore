@@ -1,0 +1,7 @@
+__pycache__/
+config/__pycache__
+data/__pycache__
+data/imdb
+t5/__pycache__
+transformers/__pycache__
+
