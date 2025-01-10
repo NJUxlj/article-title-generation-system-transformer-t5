@@ -1,15 +1,18 @@
 import nltk
 nltk.download('stopwords')
 nltk.download('punkt')
+nltk.download('punkt_tab')
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 import pandas as pd
 import torch
 import torch.nn as nn
 from typing import List, Dict, Tuple, Union, Optional
 import os
+
+import re
 
 import numpy as np
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, LabelEncoder    
@@ -18,10 +21,14 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler, LabelEncoder
 
 from collections import Counter
 from datasets import (
-    load_dataset
+    load_dataset,
+    Dataset,
 )
 
-from config import DEVICE
+import sys
+sys.path.append("../")
+
+from config.config import DEVICE
 
 class PandasDataset(Dataset):
     '''
@@ -100,31 +107,102 @@ class PandasDataset(Dataset):
         return len(self.df)
 
 
-    def __getitem__(self, index)-> Dict[str, torch.Tensor]:
+    def __getitem__(self, idx)-> Dict[str, Union[torch.Tensor, str]]:
         """  
         获取单个样本  
-        返回一个字典，包含所有特征和目标变量（如果存在）  
+        
+        Args:  
+            idx: 样本索引  
+            
+        Returns:  
+            包含所有特征和目标变量的字典，格式为：  
+            {  
+                'numeric_feature_name': tensor(value, dtype=torch.float32),  
+                'categorical_feature_name_encoded': tensor(value, dtype=torch.long),  
+                'text_feature_name': str,  
+                'target_name': tensor(value, dtype=torch.float32 or torch.long)  
+            }  
+        
+        Raises:  
+            IndexError: 当索引超出范围时  
+            ValueError: 当数据格式不正确时  
         """  
-        sample = {}
 
-        if self.numeric_cols:
-            pass
+        try:
+            sample = {}
+
+            # 获取数值型特征  
+            if self.numeric_cols:  
+                numeric_features:np.ndarray = self.df[self.numeric_cols].iloc[idx].values # values表示转为numpy
+                # 确保numeric_features是二维数组  
+                numeric_features = numeric_features.reshape(-1)  
+                # 使用字典推导式提高代码简洁性  
+                numeric_dict = {  
+                    col: torch.tensor(val, dtype=torch.float32)
+                    for col, val in zip(self.numeric_cols, numeric_features)  
+                }  
+                sample.update(numeric_dict) 
+        
+            
+            # 获取类别型特征  
+            if self.categorical_cols:  
+                categorical_features:List[int]= [  
+                    self.df[f"{col}_encoded"].iloc[idx]  # 是一个标量
+                    for col in self.categorical_cols  
+                ]
+
+                # 使用字典推导式  
+                categorical_dict = {  
+                    f"{col}_encoded": torch.tensor(val, dtype=torch.long) 
+                    for col, val in zip(self.categorical_cols, categorical_features)  
+                }  
+                sample.update(categorical_dict) 
 
 
-        if self.categorical_cols:
-            pass
+            
+            # 获取文本特征  
+            if self.text_cols:  
+                text_dict = {  
+                    col: str(self.df[col].iloc[idx])  
+                    for col in self.text_cols  
+                }  
+
+                sample.update(text_dict)
+            
+            # 获取目标变量  
+            if self.target_col:  
+
+                target_col = f"{self.target_col}_encoded"   \
+                                    if self.target_col in self.label_encoders   \
+                                                                    else self.target_col 
+            
+                target_value = self.df[target_col].iloc[idx]
+ 
+                # 根据目标变量类型选择适当的张量类型  
+                if isinstance(target_value, (int, np.integer)):  
+                    target_tensor = torch.tensor(target_value, dtype=torch.long)  
+                else:  
+                    target_tensor = torch.tensor(target_value, dtype=torch.float32)  
+                
+                sample[self.target_col] = target_tensor  
 
 
-        if self.text_cols:
-            pass
 
 
-        if self.target_col:
-            pass
+            # 最后统一进行设备迁移，避免多次迁移  
+            if hasattr(self, 'device') and self.device is not None:  
+                sample = {  
+                    k: v.to(self.device) if isinstance(v, torch.Tensor) else v  
+                    for k, v in sample.items()  
+                } 
 
+            return sample
 
+        except IndexError as e:
+            raise IndexError(f"索引 {idx} 超出范围 (0, {len(self.df)-1})") from e
 
-        return sample
+        except Exception as e:  
+            raise ValueError(f"处理索引 {idx} 的数据时出错: {str(e)}") from e
     
 
     def print_data_features(self):
@@ -184,7 +262,8 @@ class HFDataset(Dataset):
     def __init__(
             self, 
             dataset_name: str, 
-            text_column: str, 
+            text_column: str,
+            subset:str = None, 
             split: str = "train",
             **kwargs
             ):  
@@ -195,17 +274,64 @@ class HFDataset(Dataset):
             text_column: 需要处理的文本列名  
             split: 数据集分片名称  
         """  
-        self.dataset = load_dataset(dataset_name, split=split)  
+        self.dataset = load_dataset(dataset_name, split=split) 
         self.text_column = text_column  
         self.stop_words = set(stopwords.words('english'))  
 
+        # 复制原始数据集的属性  
+        self._data =  self.dataset._data  
+        self._info =  self.dataset.info  
+        self._split =  self.dataset.split  
+        self._features =  self.dataset.features  
+        self._indices =  self.dataset._indices  
+
+        # 调用父类的__init__  
+        # super().__init__()  
+        # super().__init__(  
+        #     self.original_dataset.data,  
+        #     self.original_dataset.info,  
+        #     self.original_dataset.split,  
+        #     self.original_dataset.features,  
+        #     self.original_dataset._indices  
+        # )  
+
+
 
     def __len__(self):
-        return len(self.dataset)
+        return super().__len__()  
 
 
-    def __getitem__(self, index):
-        return self.dataset[index]
+    def __getitem__(self, key: Union[int, slice, str])-> Union[Dict, List[Dict]]:
+        """
+        获取单个样本
+        Args:
+            key: 样本索引或切片
+        Returns:
+            处理后的样本
+        """
+        if isinstance(key, slice):
+            start, stop, step = key.indices(len(self))
+            '''
+            方法会根据数据集的长度调整切片的起始、结束和步长，
+            返回一个包含调整后值的元组 (start, stop, step)
+
+            总结来说，这句代码确保了切片操作在数据集的有效范围内，避免了越界错误。
+            '''
+            return [self._data[i] for i in range(start, stop, step)]
+        elif isinstance(key, int):
+            # 处理负数索引  
+            if key < 0:  
+                key = len(self) + key  
+            if key < 0 or key >= len(self):  
+                raise IndexError(f"Index {key} is out of range for dataset with size {len(self)}")  
+            
+            # return self._data[key].to_pydict() 
+            return self._data[key]
+        
+        elif isinstance(key, str):
+            if key not in self._features:  
+                raise KeyError(f"Column '{key}' not found in dataset. Available columns: {list(self._features.keys())}")
+            return self._data[key]
         
     def avg_word(self, sentence: str) -> float:  
         """  
@@ -219,18 +345,21 @@ class HFDataset(Dataset):
         if not words:  
             return 0  
         return sum(len(word) for word in words) / len(words)  
-    
+
     def to_lower(self) -> None:  
         """将文本转换为小写"""  
         self.dataset = self.dataset.map(  
-            lambda x: {self.text_column: x[self.text_column].lower()}  
+            lambda x: {self.text_column: x[self.text_column].lower()},   # x 的数据类型是一个字典（dict），它代表了数据集中的一行数据。
+            remove_columns=[self.text_column]  
         )  
     
     def to_upper(self) -> None:  
         """将文本转换为大写"""  
-        self.dataset = self.dataset.map(  
-            lambda x: {self.text_column: x[self.text_column].upper()}  
-        )  
+        self.dataset = self.dataset.map(
+            lambda x: {self.text_column: x[self.text_column].upper()},
+            remove_columns = [self.text_column]
+        )
+
     
     def remove_punctuation_special_symbols(self) -> None:  
         """移除标点符号和特殊字符"""  
@@ -241,6 +370,7 @@ class HFDataset(Dataset):
         self.dataset = self.dataset.map(  
             lambda x: {self.text_column: clean_text(x[self.text_column])}  
         )  
+
     
     def remove_stopwords(self) -> None:  
         """移除停用词"""  
@@ -252,6 +382,7 @@ class HFDataset(Dataset):
         self.dataset = self.dataset.map(  
             lambda x: {self.text_column: remove_stops(x[self.text_column])}  
         )  
+
     
     def remove_scarce_words(self, min_freq: int = 5) -> None:  
         """  
@@ -276,6 +407,7 @@ class HFDataset(Dataset):
         self.dataset = self.dataset.map(  
             lambda x: {self.text_column: filter_scarce_words(x[self.text_column])}  
         )  
+
     
     def clean_data(self,   
                    to_lower: bool = True,  
@@ -303,11 +435,8 @@ class HFDataset(Dataset):
         if remove_scarce:  
             self.remove_scarce_words(min_freq)  
             
-        return self.dataset  
-    
-    def get_dataset(self) -> Dataset:  
-        """获取当前数据集"""  
-        return self.dataset  
+        return self.dataset
+
 
 
 
@@ -319,5 +448,27 @@ class HFDataset(Dataset):
 
 
 if __name__ == '__main__':
-    ds = PandasDataset('../sample_data.json')
-    ds.print_dataframe_info()
+    # ds = PandasDataset('../sample_data.json')
+    # ds.print_dataframe_info()
+
+
+    # 以IMDB数据集为例  
+    hf_ds = HFDataset("./imdb", text_column="text", split = 'train')  
+     # 打印原始数据集的一个样本  
+    print("Original text:", hf_ds[hf_ds.text_column][:200])  
+
+    cleaned_dataset = hf_ds.clean_data(  
+        to_lower=True,  
+        remove_punct=True,  
+        remove_stops=True,  
+        remove_scarce=True,  
+        min_freq=5  
+    )  
+    
+    # 打印清理后的样本  
+    print("\nCleaned text:", cleaned_dataset[0][hf_ds.text_column][:200])  
+
+
+    # 验证数据集的基本功能  
+    print("\nDataset length:", len(cleaned_dataset))  
+    print("Dataset features:", cleaned_dataset.features)
