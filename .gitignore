@@ -1,7 +1,7 @@
 __pycache__/
 config/__pycache__
-data/__pycache__
-data/imdb
+data/!data_preprocess.py
 t5/__pycache__
 transformers/__pycache__
+tokenization/__pycache__
 
