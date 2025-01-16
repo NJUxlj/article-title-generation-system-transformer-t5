@@ -1,5 +1,6 @@
 ''' Define the sublayers in encoder/decoder layer '''
 import numpy as np
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformer.Modules import ScaledDotProductAttention
@@ -30,8 +31,44 @@ class MultiHeadAttention(nn.Module):
         
 
     def forward(self, q, k, v, mask=None):
-        pass
+        '''
+        mask.shape = (B, q_len, k_len)
+        '''
+        d_k, d_v, n_head = self.d_k, self.d_v, self.n_head
+        sz_b, len_q, len_k, len_v = q.size(0), q.size(1), k.size(1), v.size(1)
         
+        residual = q
+
+        # Pass through the pre-attention projection: b x lq x (n*dv)
+        # Separate different heads: b x lq x n x dv
+        q = self.w_qs(q).view(sz_b, len_q, n_head, d_k)
+        k = self.w_ks(k).view(sz_b, len_k, n_head, d_k)
+        v = self.w_vs(v).view(sz_b, len_q, n_head, d_v)
+
+
+        # Transpose for attention dot product: b x n x lq x dv
+        q,k,v = q.transpose(1,2), k.transpose(1,2), v.transpose(1,2)
+
+        # 加掩码
+        if mask is not None:
+            # For head axis broadcasting.
+            mask = mask.unsqueeze(1)      # mask.shape = (B, n_head, q_len, k_len)
+
+        # 计算 attention
+        q, attn = self.attention(q, k ,v, mask=mask)
+        q:torch.LongTensor
+        # 转置回来
+        # Transpose to move the head dimension back: b x lq x n x dv
+        # Combine the last two dimensions to concatenate all the heads together: b x lq x (n*dv)
+        q= q.transpose(1,2).contiguous().view(sz_b, len_q, -1)
+
+        # dropout， residual， layernorm
+        q = self.dropout(self.fc(q))
+        q+=residual
+        q = self.layer_norm(q)
+
+        return q, attn
+
 
 
 class PositionwiseFeedForward(nn.Module):
