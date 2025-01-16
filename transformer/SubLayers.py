@@ -90,7 +90,7 @@ class PositionwiseFeedForward(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
 
-    def forward(self, x):
+    def forward(self, x)->torch.LongTensor:
         residual = x
 
         x = F.relu(self.w_1(x))
