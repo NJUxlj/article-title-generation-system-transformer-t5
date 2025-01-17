@@ -37,23 +37,26 @@ def main(config):
 	
 	'''
 	#创建保存模型的目录
-
-
-
+	if not os.path.isdir(config['model_path']):
+		os.mkdir(config['model_path'])
 
 	# 加载模型
+	logger.info()
 
+	model = Transformer(
 
+	)
 
-	# gpu transfer
-
-
+	cuda_flag = torch.cuda.is_available()
+	if cuda_flag:
+		logger.info("gpu可以使用，迁移模型至GPU")
+		model = model.cuda()
 
 	# optimizer
-
+	optimizer = choose_optimizer(config, model)
 
 	# training data
-
+	
 
 	# evaluator
 
