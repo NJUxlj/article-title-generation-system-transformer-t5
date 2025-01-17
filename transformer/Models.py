@@ -58,6 +58,15 @@ def get_subsequent_mask(seq:torch.LongTensor) -> torch.BoolTensor:
         得到一个下三角矩阵，其中对角线及以下的元素为1，对角线以上的元素为0。
         .bool() 将矩阵中的元素转换为布尔类型，即1变为 True，0变为 False。
         最终得到的 subsequent_mask 是一个形状为 (1, len_s, len_s) 的布尔类型张量，表示一个掩码，用于屏蔽掉未来的信息。
+
+    
+        举例：
+        True, False, False, False, False,
+        True, True, False, False, False,   
+        True, True, True, False, False,
+        True, True, True, True, False,
+        True, True, True, True, True,
+
     '''
     len_s = seq.size(1)
     subsequent_mask = (
@@ -306,22 +315,47 @@ class Transformer(nn.Module):
             self.encoder.src_word_emb.weight = self.decoder.trg_word_emb.weight
             
     def forward(self, src_seq, trg_seq):
-        src_mask  = get_pad_mask(src_seq, self.src_pad_idx)
-        trg_mask = get_pad_mask(trg_seq, self.trg_pad_idx) & get_subsequent_mask(trg_seq)
+        src_mask  = get_pad_mask(src_seq, self.src_pad_idx) # shape = [B, 1, L]
+        trg_mask = get_pad_mask(trg_seq, self.trg_pad_idx) & get_subsequent_mask(trg_seq) # shape = [1, L, L]
 
         '''
         get_pad_mask(trg_seq, self.trg_pad_idx) 生成一个布尔型的掩码，
         用于标记目标序列中的填充位置，与源序列的掩码生成方式相同
+
+        shape = [B, 1, L] 的 bool 矩阵, 最后会广播成 [B, L, L]
+
+        1 1 1 1 pad pad pad  
+
+        ----> 广播以后
+
+        1 1 1 1 pad pad pad
+        1 1 1 1 pad pad pad
+        1 1 1 1 pad pad pad
+        1 1 1 1 pad pad pad
+        1 1 1 1 pad pad pad
+        1 1 1 1 pad pad pad
+        1 1 1 1 pad pad pad
+
 
         get_subsequent_mask(trg_seq) 生成一个下三角矩阵的掩码，
         用于防止解码器在训练时看到未来的信息。
         这个掩码的形状为 (batch_size, seq_len, seq_len)，
         其中对角线及以下的元素为 True，对角线以上的元素为 False。
 
+        shape = [1, L, L] 的 bool矩阵
+
+        1 0 0 0 0 
+        1 1 0 0 0
+        1 1 1 0 0
+        1 1 1 1 0
+        1 1 1 1 1
+
         & 操作符用于对两个掩码进行逐元素的逻辑与操作，得到最终的 trg_mask。
         这个掩码的形状为 (batch_size, seq_len, seq_len)，
-        其中 True 表示该位置是有效输入且在当前时间步之前，
+        其中 True 表示该位置是有效输入（不是 padding id）且在当前时间步之前，
         False 表示该位置是填充或在当前时间步之后。
+
+        L 是decoder的目标字符序列的长度
         '''
 
 
@@ -329,7 +363,7 @@ class Transformer(nn.Module):
         # enc_output会接收self.encoder返回的第一个值，而*_会接收剩余的所有值（如果有的话）并丢弃。
         enc_output, *_ = self.encoder.forward(
             src_seq = src_seq,
-            src_mask=src_mask
+            src_mask = src_mask
         )
 
         dec_output, *_ = self.decoder.forward(

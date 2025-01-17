@@ -8,7 +8,7 @@ import time
 import logging
 import json
 
-from config import Config
+from config.config import Config
 
 logging.basicConfig(level=logging.INFO, format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -27,10 +27,6 @@ def choose_optimizer(config, model):
 		return torch.optim.Adam(param = model.parameters(), lr = learning_rate)
 	elif optimizer == 'sgd':
 		return torch.optim.Adam(param = model.parameters(), lr = learning_rate)
-
-
-
-
 
 
 

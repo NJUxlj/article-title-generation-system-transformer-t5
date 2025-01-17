@@ -2,18 +2,18 @@
 import numpy as np
 
 class ScheduledOptim():
-	'''A simple wrapper class for learning rate scheduling'''
-	'''一个用于学习率调度的包装类'''
+    '''A simple wrapper class for learning rate scheduling'''
+    '''一个用于学习率调度的包装类'''
 
-	def __init__(self, optimizer, lr_mul, d_model, n_warmup_steps):
-		'''
+    def __init__(self, optimizer, lr_mul, d_model, n_warmup_steps):
+        '''
         :param optimizer 是传入的优化器对象
-  		:param lr_mul: 是学习率的乘数，用于调整学习率的初始值。
-		:param d_model 是模型的隐藏层维度，通常用于计算学习率的缩放因子。
-  		:param n_warmup_steps 是预热步骤的数量，在训练开始时，学习率会逐渐增加到一个较高的值，然后再逐渐减小。
+        :param lr_mul: 是学习率的乘数，用于调整学习率的初始值。
+        :param d_model 是模型的隐藏层维度，通常用于计算学习率的缩放因子。
+        :param n_warmup_steps 是预热步骤的数量，在训练开始时，学习率会逐渐增加到一个较高的值，然后再逐渐减小。
         :param n_steps 是当前的训练步骤数，初始化为 0。
 
-		'''
+        '''
         self._optimizer = optimizer
         self.lr_mul = lr_mul
         self.d_model = d_model
@@ -24,7 +24,7 @@ class ScheduledOptim():
     def step_and_update_lr(self):
         "Step with the inner optimizer"
         self._update_learning_rate()
-		self._optimizer.step()
+        self._optimizer.step()
 
     def zero_grad(self):
         self._optimizer.zero_grad()
@@ -96,7 +96,7 @@ class ScheduledOptim():
         self.n_steps+=1
         lr = self.lr_mul * self._get_lr_scale()
         for param_group in self._optimizer.param_groups():
-			param_group['lr'] = lr
+            param_group['lr'] = lr
 
 
 

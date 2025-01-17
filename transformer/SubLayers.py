@@ -55,7 +55,7 @@ class MultiHeadAttention(nn.Module):
             mask = mask.unsqueeze(1)      # mask.shape = (B, n_head, q_len, k_len)
 
         # 计算 attention
-        q, attn = self.attention(q, k ,v, mask=mask)
+        q, attn = self.attention.forward(q, k ,v, mask=mask)
         q:torch.LongTensor
         # 转置回来
         # Transpose to move the head dimension back: b x lq x n x dv
