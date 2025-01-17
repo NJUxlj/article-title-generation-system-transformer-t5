@@ -6,6 +6,69 @@ import numpy as np
 
 from transformer.Layers import EncoderLayer, DecoderLayer
 
+
+def get_pad_mask(seq, pad_idx):
+    '''
+    :param seq.shape = (B, L)
+
+    :return shape = (B, L, )
+
+    seq != pad_idx：这是一个逐元素的比较操作，
+    比较序列 seq 中的每个元素是否不等于填充索引 pad_idx。
+    结果是一个布尔型的张量，形状与 seq 相同
+
+    .unsqueeze(-2)：这个操作在张量的倒数第二个维度上增加一个维度。
+        这是为了将来与下三角掩码矩阵 (subsequent mask, shape = (B, L, L)) 做逐元素的 “与” 操作
+    
+    例如，如果 seq 的形状是 (batch_size, seq_length)，
+    那么 (seq != pad_idx) 的形状也是 (batch_size, seq_length)，
+    而 .unsqueeze(-2) 操作后，形状变为 (batch_size, 1, seq_length)。
+
+    举例：
+    True, True, True, False, False,
+    True, True, True, False, False,    
+    True, True, True, True, False,
+    True, True, True, False, False, 
+    '''
+    return (seq!=pad_idx).unsqueeze(-2)
+
+
+
+def get_subsequent_mask(seq:torch.LongTensor) -> torch.BoolTensor:
+    '''
+    生成一个掩码（mask），用于在序列模型（如Transformer）中屏蔽掉未来的信息。
+    
+        在序列到序列（seq2seq）模型中，
+        解码器在生成输出时不应该看到未来的信息，
+        因此需要一个掩码来确保解码器只能关注当前位置及其之前的位置。
+    
+    :param seq seq.shape = (B, L)
+
+
+    subsequent_mask = (
+        1 - torch.triu(torch.ones((1, len_s, len_s), device=seq.device), diagonal=1)
+        ).bool()
+
+        这是生成掩码的核心代码。
+        torch.triu 函数生成一个上三角矩阵，
+        其中对角线及以上的元素为1，对角线以下的元素为0。
+        
+        diagonal=1 参数表示从主对角线向上偏移1，即主对角线上的元素也为0。
+        1 - torch.triu(...) 将上三角矩阵中的1变为0，0变为1，
+        得到一个下三角矩阵，其中对角线及以下的元素为1，对角线以上的元素为0。
+        .bool() 将矩阵中的元素转换为布尔类型，即1变为 True，0变为 False。
+        最终得到的 subsequent_mask 是一个形状为 (1, len_s, len_s) 的布尔类型张量，表示一个掩码，用于屏蔽掉未来的信息。
+    '''
+    len_s = seq.size(1)
+    subsequent_mask = (
+        1-torch.triu(torch.ones((1, len_s,len_s), device = seq.device), diagonal=1)
+        ).bool()
+
+    return subsequent_mask
+
+
+
+
 class PositionalEncoding(nn.Module):
     
 
@@ -169,6 +232,9 @@ class Transformer(nn.Module):
             ):
         super().__init__()
 
+        self.src_pad_idx = src_pad_idx
+        self.trg_pad_idx = trg_pad_idx
+
         # In section 3.4 of paper "Attention Is All You Need", there is such detail:
         # "In our model, we share the same weight matrix between the two
         # embedding layers and the pre-softmax linear transformation...
@@ -195,10 +261,13 @@ class Transformer(nn.Module):
 
         self.decoder = Decoder(
             n_trg_vocab=n_trg_vocab, n_positions=n_positions,
+            d_word_vec=d_word_vec, d_model = d_model, d_inner=d_inner,
+            n_layers =n_layers, n_head =n_head, d_k=d_k, d_v = d_v,
+            pad_idx = trg_pad_idx, dropout=dropout,scale_emb = scale_emb
+        )       
 
-        )
-
-        self.trg_word_prj = nn.Linear()
+        # 也是一个word embedding
+        self.trg_word_prj = nn.Linear(d_model, n_trg_vocab, bias=False)
 
         # 模型参数初始化：
         '''
@@ -224,5 +293,53 @@ class Transformer(nn.Module):
             if p.dim()>1:
                 nn.init.xavier_uniform_(p)
 
+        assert d_model == d_word_vec, \
+        'To facilitate the residual connections, \
+        the dimensions of all module outputs shall be the same.'
+        
+
+        if trg_emb_prj_weight_sharing:
+            # share the weight between the target word embedding and the last dense layer
+            self.trg_word_prj.weight = self.decoder.trg_word_emb.weight
+
+        if emb_src_trg_weight_sharing:
+            self.encoder.src_word_emb.weight = self.decoder.trg_word_emb.weight
+            
     def forward(self, src_seq, trg_seq):
-        pass
+        src_mask  = get_pad_mask(src_seq, self.src_pad_idx)
+        trg_mask = get_pad_mask(trg_seq, self.trg_pad_idx) & get_subsequent_mask(trg_seq)
+
+        '''
+        get_pad_mask(trg_seq, self.trg_pad_idx) 生成一个布尔型的掩码，
+        用于标记目标序列中的填充位置，与源序列的掩码生成方式相同
+
+        get_subsequent_mask(trg_seq) 生成一个下三角矩阵的掩码，
+        用于防止解码器在训练时看到未来的信息。
+        这个掩码的形状为 (batch_size, seq_len, seq_len)，
+        其中对角线及以下的元素为 True，对角线以上的元素为 False。
+
+        & 操作符用于对两个掩码进行逐元素的逻辑与操作，得到最终的 trg_mask。
+        这个掩码的形状为 (batch_size, seq_len, seq_len)，
+        其中 True 表示该位置是有效输入且在当前时间步之前，
+        False 表示该位置是填充或在当前时间步之后。
+        '''
+
+
+        # enc_output, *_ = ... 这部分代码使用了Python的解包（unpacking）语法。
+        # enc_output会接收self.encoder返回的第一个值，而*_会接收剩余的所有值（如果有的话）并丢弃。
+        enc_output, *_ = self.encoder.forward(
+            src_seq = src_seq,
+            src_mask=src_mask
+        )
+
+        dec_output, *_ = self.decoder.forward(
+            trg_seq, trg_mask, enc_output, src_mask
+        )
+
+        seq_logit = self.trg_word_prj(dec_output)
+
+        if self.scale_prj:
+            seq_logit *= self.d_model**-0.5
+        
+        seq_logit = seq_logit.view(-1, seq_logit.shape[-1])
+        return seq_logit
