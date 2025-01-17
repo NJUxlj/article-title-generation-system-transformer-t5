@@ -53,7 +53,7 @@ class PositionalEncoding(nn.Module):
         '''
         x.shape = (B, L, d_model)
         '''
-        return x+ self.pos_table(x[:,:x.size(1),:]).clone().detach()
+        return x + self.pos_table(x[:,:x.size(1),:]).clone().detach()
 
 
 
@@ -66,7 +66,7 @@ class Encoder(nn.Module):
             d_model, d_inner, pad_idx, dropout=0.1, n_position=200, scale_emb=False):
         super().__init__()
         self.src_word_emb = nn.Embedding(n_src_vocab, d_word_vec, padding_idx=pad_idx)
-        self.position_enc = PositionalEncoding()
+        self.position_enc = PositionalEncoding(d_model, n_position)
         self.layer_stack = nn.ModuleList([
             EncoderLayer(d_model, d_inner, n_head, d_k, d_v, dropout=dropout)
             for _ in range(n_layers)
@@ -101,7 +101,7 @@ class Encoder(nn.Module):
 
         if return_attns:
             return enc_output, enc_slf_attn_list
-        return enc_output
+        return enc_output,
 
 
 
@@ -116,7 +116,7 @@ class Decoder(nn.Module):
         super().__init__()
 
         self.trg_word_emb = nn.Embedding(n_trg_vocab, d_word_vec, padding_idx=pad_idx)
-        self.position_enc = PositionalEncoding(d_word_vec)
+        self.position_enc = PositionalEncoding(d_word_vec, n_position)
         self.dropout =nn.Dropout(dropout)
 
         self.layer_stack = nn.ModuleList(
@@ -124,12 +124,36 @@ class Decoder(nn.Module):
               DecoderLayer(d_model, d_inner, n_head, d_k, d_v, dropout=dropout)  for _ in range(n_layers)
             ]
         )
+        self.scale_emb = scale_emb
+        self.d_model = d_model
+        self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
 
 
 
-    def forward(self, ):
-        pass
+    def forward(self, trg_seq, trg_mask, enc_output, src_mask, return_attns=False):
+        
+        dec_slf_attn_list, dec_enc_attn_list = [], []
 
+        decoder_output = self.trg_word_emb(trg_seq)
+
+        if self.scale_emb:
+            decoder_output *= self.d_model*0.5
+        decoder_output = self.dropout(self.position_enc(decoder_output))
+        decoder_output = self.layer_norm(decoder_output)
+
+
+        for dec_layer in self.layer_stack:
+            dec_layer: DecoderLayer
+            dec_output,dec_slf_attn, dec_enc_attn = dec_layer.forward(
+                decoder_output, enc_output, slf_attn_mask=trg_mask, dec_enc_attn_mask=src_mask
+            )
+            dec_slf_attn_list += [dec_slf_attn] if return_attns else []
+            dec_enc_attn_list += [dec_enc_attn] if return_attns else []
+
+
+        if return_attns:
+            return decoder_output, dec_slf_attn_list, dec_enc_attn_list
+        return decoder_output,
 
 
 class Transformer(nn.Module):
