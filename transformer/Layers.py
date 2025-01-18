@@ -46,8 +46,8 @@ class DecoderLayer(nn.Module):
             slf_attn_mask=None, dec_enc_attn_mask=None
             ):
         '''
-        dec_input: decoder的输入
-        enc_output: encoder最终输出的上下文
+        dec_input: decoder的输入, shape = [B, L, d_model]
+        enc_output: encoder最终输出的上下文, shape = [B, L, d_model]
         slf_attn_mask: decoder最底下的 Masked multi-head attention 的掩码， 是上三角, 用来遮住未来的信息
         dec_enc_attn_mask: decoder中第二层的  multi-head attention 的掩码， 填 None就行
         '''

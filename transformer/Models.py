@@ -44,6 +44,7 @@ def get_subsequent_mask(seq:torch.LongTensor) -> torch.BoolTensor:
     
     :param seq seq.shape = (B, L)
 
+    return subsequent_mask, shape = (1, L, L)
 
     subsequent_mask = (
         1 - torch.triu(torch.ones((1, len_s, len_s), device=seq.device), diagonal=1)
@@ -153,6 +154,10 @@ class Encoder(nn.Module):
         '''
         :param src_seq: padded input sequence of shape (B, L, d_model)
         :param src_mask: source sequence mask of shape (B, L)
+
+        return enc_output, enc_slf_attn_list
+        or
+        return enc_output,
         '''
         enc_slf_attn_list = []
 
@@ -203,7 +208,11 @@ class Decoder(nn.Module):
 
 
     def forward(self, trg_seq, trg_mask, enc_output, src_mask, return_attns=False):
-        
+        '''
+        return decoder_output, dec_slf_attn_list, dec_enc_attn_list
+                
+                or return decoder_output
+        '''
         dec_slf_attn_list, dec_enc_attn_list = [], []
 
         decoder_output = self.trg_word_emb(trg_seq)
@@ -315,6 +324,9 @@ class Transformer(nn.Module):
             self.encoder.src_word_emb.weight = self.decoder.trg_word_emb.weight
             
     def forward(self, src_seq, trg_seq):
+        '''
+        return seq_logits, shape = [B*L, n_trg_vocab]
+        '''
         src_mask  = get_pad_mask(src_seq, self.src_pad_idx) # shape = [B, 1, L]
         trg_mask = get_pad_mask(trg_seq, self.trg_pad_idx) & get_subsequent_mask(trg_seq) # shape = [1, L, L]
 
@@ -375,5 +387,5 @@ class Transformer(nn.Module):
         if self.scale_prj:
             seq_logit *= self.d_model**-0.5
         
-        seq_logit = seq_logit.view(-1, seq_logit.shape[-1])
+        seq_logit = seq_logit.view(-1, seq_logit.shape[-1]) # shape = [B*L, n_trg_vocab]
         return seq_logit
