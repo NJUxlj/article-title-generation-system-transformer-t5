@@ -30,9 +30,9 @@ def choose_optimizer(config, model):
 	learning_rate = config['learning_rate']
 
 	if optimizer == 'adam':
-		return torch.optim.Adam(param = model.parameters(), lr = learning_rate)
+		return torch.optim.Adam(params = model.parameters(), lr = learning_rate)
 	elif optimizer == 'sgd':
-		return torch.optim.Adam(param = model.parameters(), lr = learning_rate)
+		return torch.optim.Adam(params = model.parameters(), lr = learning_rate)
 
 
 
@@ -68,7 +68,7 @@ def main(config):
 	optimizer = choose_optimizer(config, model)
 
 	# training data
-	train_data = load_data()
+	train_data = load_data(config['train_data_path'],config,logger)
 
 	# evaluator
 	evaluator = Evaluator(config,model,logger)

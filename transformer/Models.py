@@ -85,6 +85,7 @@ class PositionalEncoding(nn.Module):
     def __init__(self, d_hid, n_position=200):
         '''
         '''
+        super().__init__()
         # Add a buffer to the module.
         # buffer 中存放的是当前模块中的一些状态值，而非参数
         self.register_buffer('pos_table', self._get_sinusoid_encoding_table(n_position, d_hid))
@@ -244,7 +245,7 @@ class Transformer(nn.Module):
             n_src_vocab,n_trg_vocab,
             src_pad_idx, trg_pad_idx,
             d_word_vec=512, d_model=512,d_inner=2048,
-            n_layers=6, n_head=8, d_k=64, d_v=64, dropout=0.1, n_positions =200,
+            n_layers=6, n_head=8, d_k=64, d_v=64, dropout=0.1, n_position =200,
             trg_emb_prj_weight_sharing=True, emb_src_trg_weight_sharing=True,
             scale_emb_or_prj='none',
             ):
@@ -271,14 +272,14 @@ class Transformer(nn.Module):
 
 
         self.encoder = Encoder(
-            n_src_vocab = n_src_vocab, n_postions = n_positions,
+            n_src_vocab = n_src_vocab, n_position = n_position,
             d_word_vec=d_word_vec, d_model = d_model, d_inner=d_inner,
             n_layers =n_layers, n_head =n_head, d_k=d_k, d_v = d_v,
             pad_idx = src_pad_idx, dropout=dropout,scale_emb = scale_emb
         )
 
         self.decoder = Decoder(
-            n_trg_vocab=n_trg_vocab, n_positions=n_positions,
+            n_trg_vocab=n_trg_vocab, n_position=n_position,
             d_word_vec=d_word_vec, d_model = d_model, d_inner=d_inner,
             n_layers =n_layers, n_head =n_head, d_k=d_k, d_v = d_v,
             pad_idx = trg_pad_idx, dropout=dropout,scale_emb = scale_emb

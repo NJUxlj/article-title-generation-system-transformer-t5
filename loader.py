@@ -3,7 +3,7 @@ import torch.nn as nn
 
 import json
 from config.config import Config
-from torch.utils.data import Dataset, OrderedDict, DataLoader
+from torch.utils.data import Dataset, DataLoader
 from collections import defaultdict
 
 
