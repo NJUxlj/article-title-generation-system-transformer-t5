@@ -31,7 +31,12 @@ SubLayers.py
 Translator.py
 ```
 
+- the main training loop is in the `main.py`.
+- the training data for the transformer is in `sample_data.json`
+
+
 - all T5 related code is in the fold `T5`
+- For the training data `imdb` of the t5 model, you should pre-download to the `data` folder, and use the `HFDataset` object in the `data_preprocess.py` to handle it.
 
 - the `tokenization` folder will include the BPE tokenizer and Word Piece tokenizer in the near future.
 
@@ -42,10 +47,10 @@ python main.py
 ```
 
 
-## Training Snapshot
+## Training Snapshot 
 ![Epoch 199](image/image.png)
 
 
 
 ## Result
-- We did not add any Perplexity, BLEU, ROUGE for now ...
+- We did not add any evaluation metrics like Perplexity, BLEU, ROUGE for now ...

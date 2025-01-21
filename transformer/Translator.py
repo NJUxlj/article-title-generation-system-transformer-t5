@@ -76,6 +76,7 @@ class Translator(nn.Module):
             
             enc_output.shape = (batch_size * beam_size, L, d_model), where batch_size = 1
             gen_seq.shape = (beam_size, L)
+            scores.shape = (beam_size, )
         功能：
             _get_init_state 方法初始化了束搜索的状态，包括编码输出、生成序列的初始状态和得分。
             这些状态将用于后续的束搜索过程，以生成目标语言的序列。
@@ -161,9 +162,11 @@ class Translator(nn.Module):
             在每一步都扩展这些序列，然后选择最有可能的k个序列继续进行下一步的生成。
             这样可以比贪心搜索得到更好的生成结果。
 
-        :param: gen_seq: 目前为止已经生成的序列, gen_seq.shape = (batch_size, seq_len)
-        :param: scores: 目前为止已经生成的序列的分数, scores.shape = (batch_size, seq_len), 其中scores[i, j]表示第i个句子的第j个词的分数, 分数是log概率
+        :param: gen_seq: 目前为止已经生成的序列, gen_seq.shape =  (beam_size, max_seq_len)
+        :param: scores: 目前为止已经生成的序列的分数, scores.shape = (beam_size, )
         :param: dec_output: 模型的输出, dec_output.shape = (beam_size, seq_len, vocab_size), 
+
+        return gen_seq, scores
         '''
         assert len(scores.size())==1, "we can pnly accept batch_size equals to 1 in this function"
 
@@ -175,23 +178,35 @@ class Translator(nn.Module):
         # topk(beam_size) 为每个beam选择概率最高的k个候选词
         # 结果形状: best_k2_probs, best_k2_idx 都是 [beam_size, beam_size]
         best_k2_probs, best_k2_idx = dec_output[:,-1,:].topk(beam_size) # shape = (beam_size, beam_size)
+        
+        '''
+        如何理解best_k2_probs：
+            行代表的是上一个时间步t的beam_size个beam的输出
+            列代表的是当前时间步t+1的beam_size个beam的输出
+
+            best_k2_probs[i][j]: 表示在第i个beam的下一步选择第j个候选词的概率
+        
+        '''
 
 
         # Include the previous scores
         '''
         将概率转换为对数概率
-        scores.view(beam_size, 1) 将之前的分数改变形状以便广播
-        将新的对数概率加到之前的累积分数上
+        scores.view(beam_size, 1) ：将之前的分数的形状(beam_size,)拓展一维，以便广播成 (beam_size, beam_size)
+        将新的对数概率加到之前的累积分数上, [就是把第t+1步的概率和加到第t步的概率上]
         结果形状: [beam_size, beam_size]
         '''
-        scores = torch.log(best_k2_probs).view(beam_size, -1) + scores.view(beam_size, 1)
+        scores = torch.log(best_k2_probs).view(beam_size, -1) + scores.view(beam_size, 1) # shape = (beam_size, beam_size)
 
         # Get the best k candidates from k^2 candidates.
         # scores.view(-1) 将分数展平为一维，大小为 beam_size * beam_size
         # 从k^2个候选中选择最高的k个分数和它们的索引。    
         # best_k_idx_in_k2 包含这k个最佳候选的索引
         scores, best_k_idx_in_k2= scores.view(-1).topk(beam_size) # shape = (beam_size, )
-
+        '''
+        假设 beam_size = 3, scores.view(-1)的下标为 [0, 1, 2, 3, 4, 5, 6, 7, 8]
+        那么best_k_idx_in_k2就可能是 [0, 3, 6]
+        '''
 
         # Get the corresponding positions of the best k candidiates.
         # 将当前取出的k个最佳id，映射到词表空间的真实下标。
@@ -199,14 +214,30 @@ class Translator(nn.Module):
         # best_k_r_idxs: 表示在哪个beam中
         # best_k_c_idxs: 表示在该beam的哪个候选位置
         best_k_r_idxs, best_k_c_idxs = best_k_idx_in_k2 // beam_size, best_k_idx_in_k2 % beam_size
+        '''
+        举例： 
+            假设 beam_size = 3, scores.view(-1)的下标为 [0, 1, 2, 3, 4, 5, 6, 7, 8]
+            那么best_k_idx_in_k2就可能是 [0, 3, 6]
+            那么best_k_r_idxs = [0//3, 3//3, 6//3] = [0, 1, 2] = [第1个beam, 第2个beam, 第3个beam]
+            那么best_k_c_idxs = [0%3, 3%3, 6%3] = [0, 0, 0] = [第1个beam的第1个候选, 第2个beam的第1个候选, 第3个beam的第1个候选]
+        '''
 
-        best_k_idx = best_k2_idx[best_k_r_idxs, best_k_c_idxs]
+        # best_k2_idx.shape = (beam_size, beam_size)
+            # 从 best_k2_idx 中选择最佳的 beam_size 个候选词的索引
+            # best_k_r_idxs 表示在哪个束中选择了最佳的候选词，
+            # best_k_c_idxs 表示在该束的哪个候选位置选择了最佳的候选词。
+        best_k_idx = best_k2_idx[best_k_r_idxs, best_k_c_idxs] # shape = (beam_size, )
 
         # Copy the corresponding previous tokens.
         '''
         更新生成序列
         首先复制被选中的beam的历史序列
         然后在当前步骤位置填入新选择的词的索引
+
+        具体来说：
+            best_k_r_idxs： 经过前1-t个时间步的topk选择后的beam的索引， shape = (beam_size, )
+
+            best_k_idx： 第t+1个时间步选择的候选词的索引， shape=(1,)
         '''
         # Copy the corresponding previous tokens.
         gen_seq[:, :step] = gen_seq[best_k_r_idxs, :step]
@@ -237,22 +268,31 @@ class Translator(nn.Module):
         with torch.no_grad():
             src_mask = get_pad_mask(src_seq, src_pad_idx) # shape = (B, L)
             enc_output, gen_seq, scores=self._get_init_state(src_seq, src_mask)
-
+            # scores.shape = (beam_size, )
             # gen_seq.shape = (beam_size, seq_len), 初始时， 
 
             ans_idx = 0 # default
 
             for step in range(1, max_seq_len):
+                # shape: (1, seq_len, vocab_size)
                 dec_output = self._model_decode(gen_seq[:,:step], enc_output, src_mask)
+                # gen_seq.shape = (beam_size, max_seq_len)
+                # scores.shape = (beam_size, )
                 gen_seq, scores = self._get_the_best_score_and_idx(gen_seq, dec_output, scores, step)
                 # Check if all path finished
                 # -- locate the eos in the generated sequences
+
+                '''
+                注意：连续生成译文只需要上面两句代码。
+
+                下面的代码都是为了判断生成句子是否达到EOS，然后挑选最好的beam做准备。
+                '''
+
                 eos_locs = gen_seq == trg_eos_idx # shape = (beam_size, seq_len)
 
                 # -- replace the eos with its position for the length penalty use
-                # self.len_map.shape = (1, max_seq_len)
+                # self.len_map.shape = (1, max_seq_len), 随后会被广播为 (beam_size, max_seq_len)
                 # 包含了位置索引，比如 [0, 1, 2, 3, ..., max_seq_len-1]
-                    # 用于追踪序列中每个位置的实际位置编号
                 seq_lens, _ = self.len_map.masked_fill(~eos_locs, max_seq_len).min(1)
 
                 # seq_lens.shape = (beam_size, )
@@ -267,16 +307,18 @@ class Translator(nn.Module):
                     在维度1（序列长度维度）上取最小值
                     返回两个值：最小值和对应的索引
 
-                整句代码的作用：找出所有生成序列中的结束标记位置
+                计算每个生成序列的长度，以便在束搜索中选择得分最高的序列作为最终的翻译结果。
                 '''
 
-                # -- check if all beams contain eos
+                # -- check if all beams contain eos 【所有beam上的句子都已经生成完毕，然后在所有的beam中选出最好的那个】
                 # sum(1) 在维度1（序列长度维度）上求和
                 # 对每个序列（beam）计算其中EOS标记的数量
-                if (eos_locs.sum(1) > 0).sum(0).item() == beam_size:
+                if (eos_locs.sum(1) > 0).sum(0).item() == beam_size: 
                     # TODO: Try different terminate conditions.
                     
                     # length punishment
+                        # scores.shape = (beam_size, )
+                        # seq_lens.shape = (beam_size, )
                     _, ans_idx = scores.div(seq_lens.float() ** alpha).max(0)
                     ans_idx = ans_idx.item()
                     break
