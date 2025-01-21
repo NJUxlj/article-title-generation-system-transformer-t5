@@ -2,6 +2,9 @@ import os
 import torch
 
 
+BERT_PATH = "/root/autodl-tmp/models/bert-base-uncased"
+
+
 Config = {
     "model_path": "output",
 	"input_max_length":120,
