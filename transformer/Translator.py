@@ -23,6 +23,7 @@ class Translator(nn.Module):
         self.beam_size = beam_size
         self.max_seq_len = max_seq_len
         self.src_pad_idx = src_pad_idx
+        self.trg_pad_idx = trg_pad_idx
         self.trg_bos_idx = trg_bos_idx
         self.trg_eos_idx = trg_eos_idx
 
@@ -113,14 +114,9 @@ class Translator(nn.Module):
         从解码输出的最后一个时间步（即最后一个词）中，
             选择概率最高的 beam_size 个词及其对应的概率
         '''
-        if scores.size(0)==1:
-            # 先转为对数概率，再展平为 shape = (beam_size, )
-            scores = torch.log(best_k_probs).view(beam_size)
-        else:
-            # 这里还没做适配
-            scores = torch.log(best_k_probs) # 对数概率在束搜索中用于计算得分。
+        # 先转为对数概率，再展平为 shape = (beam_size, )
+        scores = torch.log(best_k_probs).view(beam_size)
 
-        
         # self.blank_seqs 通常是一个填充了目标语言的填充标记（例如 <pad>）的张量，用于存储生成的序列。
         gen_seq = self.blank_seqs.clone().detach() # shape = (beam_size, max_seq_len)
 
@@ -212,9 +208,12 @@ class Translator(nn.Module):
         首先复制被选中的beam的历史序列
         然后在当前步骤位置填入新选择的词的索引
         '''
-        gen_seq[:, :step] = gen_seq[best_k_r_idxs, :step]  
-        gen_seq[:, step] = best_k_idx  
+        # Copy the corresponding previous tokens.
+        gen_seq[:, :step] = gen_seq[best_k_r_idxs, :step]
+        # Set the best tokens in this beam search step
+        gen_seq[:, step] = best_k_idx
 
+        return gen_seq, scores
 
 
 

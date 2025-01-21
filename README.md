@@ -26,6 +26,9 @@ python main.py
 ```
 
 
+## Training Snapshot
+![Epoch 199](image/image.png)
+
 
 
 ## Result

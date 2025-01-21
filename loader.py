@@ -21,9 +21,9 @@ class DataGenerator(Dataset):
         self.path = data_path
         self.vocab = load_vocab(config['vocab_path'])
         self.config['vocab_size'] = len(self.vocab)
-        self.config['pad_id'] = '[PAD]'
-        self.config['start_id'] = '[CLS]'
-        self.config['end_id'] = '[SEP]'
+        self.config['pad_idx'] = self.vocab['[PAD]']
+        self.config['start_idx'] = self.vocab['[CLS]']
+        self.config['end_idx'] = self.vocab['[SEP]']
         self.load()
 
 

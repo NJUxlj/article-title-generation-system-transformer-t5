@@ -127,7 +127,7 @@ class PositionalEncoding(nn.Module):
         '''
         x.shape = (B, L, d_model)
         '''
-        return x + self.pos_table(x[:,:x.size(1),:]).clone().detach()
+        return x + self.pos_table[:,:x.size(1),:].clone().detach()
 
 
 

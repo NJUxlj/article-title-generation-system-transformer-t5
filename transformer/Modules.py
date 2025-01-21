@@ -20,7 +20,7 @@ class ScaledDotProductAttention(nn.Module):
         mask.shape = (B, n_head, q_len, k_len)
         '''
 
-        attn = torch.matmul(q/self.temperature,k.transpose(-2,-3)) # shape = (B, n_head, q_len, k_len)
+        attn = torch.matmul(q/self.temperature,k.transpose(2,3)) # shape = (B, n_head, q_len, k_len)
 
 
         if mask!=None:

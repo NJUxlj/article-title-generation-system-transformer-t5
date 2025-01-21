@@ -37,12 +37,23 @@ class Evaluator(object):
         self.model.eval()
         self.model.cpu()
 
-        self.stats_dict = defaultdict(int)
+        self.stats_dict = defaultdict(int)  # store the evaluation results
+
+        for index, batch_data in enumerate(self.valid_data):
+            input_seqs, target_seqs, gold = batch_data
+            for input_seq in input_seqs:
+                input_seq: torch.LongTensor
+                # 目前还无法同时翻译一批句子
+                generate = self.translator.translate_sentence(input_seq.unsqueeze(0))    
+                print("输入：",self.decode_seq(input_seq))
+                print("输出：", self.decode_seq(input_seq))
+                break   
+        return
+        
 
 
-
-    def decode_seq(self):
-        pass
+    def decode_seq(self, seq:torch.LongTensor):
+        return "".join([self.reverse_vocab[int(idx)] for idx in seq])
 
 
 
