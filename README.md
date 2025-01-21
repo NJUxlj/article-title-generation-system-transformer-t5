@@ -9,6 +9,7 @@ Write a complete transformer model line by line, and use it to generate the pass
 ---
 ## Notice:
 - This project is still in the progress, which will be finished in a few days.
+- the tranformer model is finished, and you can run it by `python main.py`
 --- 
 
 
@@ -18,6 +19,21 @@ Write a complete transformer model line by line, and use it to generate the pass
 pip install -r requirements
 ```
 
+## Project Structure
+- all the transformer code is in the `transformer` folder, which includes:
+```Plain Text
+Constants.py
+Layers.py
+Models.py
+Modules.py
+Optim.py
+SubLayers.py
+Translator.py
+```
+
+- all T5 related code is in the fold `T5`
+
+- the `tokenization` folder will include the BPE tokenizer and Word Piece tokenizer in the near future.
 
 
 ## Run
@@ -32,3 +48,4 @@ python main.py
 
 
 ## Result
+- We did not add any Perplexity, BLEU, ROUGE for now ...
